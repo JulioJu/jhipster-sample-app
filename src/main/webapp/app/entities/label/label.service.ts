@@ -12,6 +12,7 @@ export type EntityResponseType = HttpResponse<Label>;
 export class LabelService {
 
     private resourceUrl =  SERVER_API_URL + 'api/labels';
+    private resourceSearchUrl = SERVER_API_URL + 'api/_search/labels';
 
     constructor(private http: HttpClient) { }
 
@@ -40,6 +41,12 @@ export class LabelService {
 
     delete(id: number): Observable<HttpResponse<any>> {
         return this.http.delete<any>(`${this.resourceUrl}/${id}`, { observe: 'response'});
+    }
+
+    search(req?: any): Observable<HttpResponse<Label[]>> {
+        const options = createRequestOption(req);
+        return this.http.get<Label[]>(this.resourceSearchUrl, { params: options, observe: 'response' })
+            .map((res: HttpResponse<Label[]>) => this.convertArrayResponse(res));
     }
 
     private convertResponse(res: EntityResponseType): EntityResponseType {

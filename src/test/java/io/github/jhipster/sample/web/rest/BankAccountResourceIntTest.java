@@ -4,6 +4,7 @@ import io.github.jhipster.sample.JhipsterSampleApplicationApp;
 
 import io.github.jhipster.sample.domain.BankAccount;
 import io.github.jhipster.sample.repository.BankAccountRepository;
+import io.github.jhipster.sample.repository.search.BankAccountSearchRepository;
 import io.github.jhipster.sample.web.rest.errors.ExceptionTranslator;
 
 import org.junit.Before;
@@ -49,6 +50,9 @@ public class BankAccountResourceIntTest {
     private BankAccountRepository bankAccountRepository;
 
     @Autowired
+    private BankAccountSearchRepository bankAccountSearchRepository;
+
+    @Autowired
     private MappingJackson2HttpMessageConverter jacksonMessageConverter;
 
     @Autowired
@@ -67,7 +71,7 @@ public class BankAccountResourceIntTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
-        final BankAccountResource bankAccountResource = new BankAccountResource(bankAccountRepository);
+        final BankAccountResource bankAccountResource = new BankAccountResource(bankAccountRepository, bankAccountSearchRepository);
         this.restBankAccountMockMvc = MockMvcBuilders.standaloneSetup(bankAccountResource)
             .setCustomArgumentResolvers(pageableArgumentResolver)
             .setControllerAdvice(exceptionTranslator)
@@ -90,6 +94,7 @@ public class BankAccountResourceIntTest {
 
     @Before
     public void initTest() {
+        bankAccountSearchRepository.deleteAll();
         bankAccount = createEntity(em);
     }
 
@@ -110,6 +115,10 @@ public class BankAccountResourceIntTest {
         BankAccount testBankAccount = bankAccountList.get(bankAccountList.size() - 1);
         assertThat(testBankAccount.getName()).isEqualTo(DEFAULT_NAME);
         assertThat(testBankAccount.getBalance()).isEqualTo(DEFAULT_BALANCE);
+
+        // Validate the BankAccount in Elasticsearch
+        BankAccount bankAccountEs = bankAccountSearchRepository.findOne(testBankAccount.getId());
+        assertThat(bankAccountEs).isEqualToIgnoringGivenFields(testBankAccount);
     }
 
     @Test
@@ -210,6 +219,7 @@ public class BankAccountResourceIntTest {
     public void updateBankAccount() throws Exception {
         // Initialize the database
         bankAccountRepository.saveAndFlush(bankAccount);
+        bankAccountSearchRepository.save(bankAccount);
         int databaseSizeBeforeUpdate = bankAccountRepository.findAll().size();
 
         // Update the bankAccount
@@ -230,6 +240,10 @@ public class BankAccountResourceIntTest {
         BankAccount testBankAccount = bankAccountList.get(bankAccountList.size() - 1);
         assertThat(testBankAccount.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testBankAccount.getBalance()).isEqualTo(UPDATED_BALANCE);
+
+        // Validate the BankAccount in Elasticsearch
+        BankAccount bankAccountEs = bankAccountSearchRepository.findOne(testBankAccount.getId());
+        assertThat(bankAccountEs).isEqualToIgnoringGivenFields(testBankAccount);
     }
 
     @Test
@@ -255,6 +269,7 @@ public class BankAccountResourceIntTest {
     public void deleteBankAccount() throws Exception {
         // Initialize the database
         bankAccountRepository.saveAndFlush(bankAccount);
+        bankAccountSearchRepository.save(bankAccount);
         int databaseSizeBeforeDelete = bankAccountRepository.findAll().size();
 
         // Get the bankAccount
@@ -262,9 +277,29 @@ public class BankAccountResourceIntTest {
             .accept(TestUtil.APPLICATION_JSON_UTF8))
             .andExpect(status().isOk());
 
+        // Validate Elasticsearch is empty
+        boolean bankAccountExistsInEs = bankAccountSearchRepository.exists(bankAccount.getId());
+        assertThat(bankAccountExistsInEs).isFalse();
+
         // Validate the database is empty
         List<BankAccount> bankAccountList = bankAccountRepository.findAll();
         assertThat(bankAccountList).hasSize(databaseSizeBeforeDelete - 1);
+    }
+
+    @Test
+    @Transactional
+    public void searchBankAccount() throws Exception {
+        // Initialize the database
+        bankAccountRepository.saveAndFlush(bankAccount);
+        bankAccountSearchRepository.save(bankAccount);
+
+        // Search the bankAccount
+        restBankAccountMockMvc.perform(get("/api/_search/bank-accounts?query=id:" + bankAccount.getId()))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8_VALUE))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(bankAccount.getId().intValue())))
+            .andExpect(jsonPath("$.[*].name").value(hasItem(DEFAULT_NAME.toString())))
+            .andExpect(jsonPath("$.[*].balance").value(hasItem(DEFAULT_BALANCE.intValue())));
     }
 
     @Test

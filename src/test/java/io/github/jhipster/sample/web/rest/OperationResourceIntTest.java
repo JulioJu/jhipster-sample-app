@@ -4,6 +4,7 @@ import io.github.jhipster.sample.JhipsterSampleApplicationApp;
 
 import io.github.jhipster.sample.domain.Operation;
 import io.github.jhipster.sample.repository.OperationRepository;
+import io.github.jhipster.sample.repository.search.OperationSearchRepository;
 import io.github.jhipster.sample.web.rest.errors.ExceptionTranslator;
 
 import org.junit.Before;
@@ -54,6 +55,9 @@ public class OperationResourceIntTest {
     private OperationRepository operationRepository;
 
     @Autowired
+    private OperationSearchRepository operationSearchRepository;
+
+    @Autowired
     private MappingJackson2HttpMessageConverter jacksonMessageConverter;
 
     @Autowired
@@ -72,7 +76,7 @@ public class OperationResourceIntTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
-        final OperationResource operationResource = new OperationResource(operationRepository);
+        final OperationResource operationResource = new OperationResource(operationRepository, operationSearchRepository);
         this.restOperationMockMvc = MockMvcBuilders.standaloneSetup(operationResource)
             .setCustomArgumentResolvers(pageableArgumentResolver)
             .setControllerAdvice(exceptionTranslator)
@@ -96,6 +100,7 @@ public class OperationResourceIntTest {
 
     @Before
     public void initTest() {
+        operationSearchRepository.deleteAll();
         operation = createEntity(em);
     }
 
@@ -117,6 +122,10 @@ public class OperationResourceIntTest {
         assertThat(testOperation.getDate()).isEqualTo(DEFAULT_DATE);
         assertThat(testOperation.getDescription()).isEqualTo(DEFAULT_DESCRIPTION);
         assertThat(testOperation.getAmount()).isEqualTo(DEFAULT_AMOUNT);
+
+        // Validate the Operation in Elasticsearch
+        Operation operationEs = operationSearchRepository.findOne(testOperation.getId());
+        assertThat(operationEs).isEqualToIgnoringGivenFields(testOperation);
     }
 
     @Test
@@ -219,6 +228,7 @@ public class OperationResourceIntTest {
     public void updateOperation() throws Exception {
         // Initialize the database
         operationRepository.saveAndFlush(operation);
+        operationSearchRepository.save(operation);
         int databaseSizeBeforeUpdate = operationRepository.findAll().size();
 
         // Update the operation
@@ -241,6 +251,10 @@ public class OperationResourceIntTest {
         assertThat(testOperation.getDate()).isEqualTo(UPDATED_DATE);
         assertThat(testOperation.getDescription()).isEqualTo(UPDATED_DESCRIPTION);
         assertThat(testOperation.getAmount()).isEqualTo(UPDATED_AMOUNT);
+
+        // Validate the Operation in Elasticsearch
+        Operation operationEs = operationSearchRepository.findOne(testOperation.getId());
+        assertThat(operationEs).isEqualToIgnoringGivenFields(testOperation);
     }
 
     @Test
@@ -266,6 +280,7 @@ public class OperationResourceIntTest {
     public void deleteOperation() throws Exception {
         // Initialize the database
         operationRepository.saveAndFlush(operation);
+        operationSearchRepository.save(operation);
         int databaseSizeBeforeDelete = operationRepository.findAll().size();
 
         // Get the operation
@@ -273,9 +288,30 @@ public class OperationResourceIntTest {
             .accept(TestUtil.APPLICATION_JSON_UTF8))
             .andExpect(status().isOk());
 
+        // Validate Elasticsearch is empty
+        boolean operationExistsInEs = operationSearchRepository.exists(operation.getId());
+        assertThat(operationExistsInEs).isFalse();
+
         // Validate the database is empty
         List<Operation> operationList = operationRepository.findAll();
         assertThat(operationList).hasSize(databaseSizeBeforeDelete - 1);
+    }
+
+    @Test
+    @Transactional
+    public void searchOperation() throws Exception {
+        // Initialize the database
+        operationRepository.saveAndFlush(operation);
+        operationSearchRepository.save(operation);
+
+        // Search the operation
+        restOperationMockMvc.perform(get("/api/_search/operations?query=id:" + operation.getId()))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8_VALUE))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(operation.getId().intValue())))
+            .andExpect(jsonPath("$.[*].date").value(hasItem(DEFAULT_DATE.toString())))
+            .andExpect(jsonPath("$.[*].description").value(hasItem(DEFAULT_DESCRIPTION.toString())))
+            .andExpect(jsonPath("$.[*].amount").value(hasItem(DEFAULT_AMOUNT.intValue())));
     }
 
     @Test

@@ -4,6 +4,7 @@ import io.github.jhipster.sample.JhipsterSampleApplicationApp;
 
 import io.github.jhipster.sample.domain.Label;
 import io.github.jhipster.sample.repository.LabelRepository;
+import io.github.jhipster.sample.repository.search.LabelSearchRepository;
 import io.github.jhipster.sample.web.rest.errors.ExceptionTranslator;
 
 import org.junit.Before;
@@ -45,6 +46,9 @@ public class LabelResourceIntTest {
     private LabelRepository labelRepository;
 
     @Autowired
+    private LabelSearchRepository labelSearchRepository;
+
+    @Autowired
     private MappingJackson2HttpMessageConverter jacksonMessageConverter;
 
     @Autowired
@@ -63,7 +67,7 @@ public class LabelResourceIntTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
-        final LabelResource labelResource = new LabelResource(labelRepository);
+        final LabelResource labelResource = new LabelResource(labelRepository, labelSearchRepository);
         this.restLabelMockMvc = MockMvcBuilders.standaloneSetup(labelResource)
             .setCustomArgumentResolvers(pageableArgumentResolver)
             .setControllerAdvice(exceptionTranslator)
@@ -85,6 +89,7 @@ public class LabelResourceIntTest {
 
     @Before
     public void initTest() {
+        labelSearchRepository.deleteAll();
         label = createEntity(em);
     }
 
@@ -104,6 +109,10 @@ public class LabelResourceIntTest {
         assertThat(labelList).hasSize(databaseSizeBeforeCreate + 1);
         Label testLabel = labelList.get(labelList.size() - 1);
         assertThat(testLabel.getLabel()).isEqualTo(DEFAULT_LABEL);
+
+        // Validate the Label in Elasticsearch
+        Label labelEs = labelSearchRepository.findOne(testLabel.getId());
+        assertThat(labelEs).isEqualToIgnoringGivenFields(testLabel);
     }
 
     @Test
@@ -184,6 +193,7 @@ public class LabelResourceIntTest {
     public void updateLabel() throws Exception {
         // Initialize the database
         labelRepository.saveAndFlush(label);
+        labelSearchRepository.save(label);
         int databaseSizeBeforeUpdate = labelRepository.findAll().size();
 
         // Update the label
@@ -202,6 +212,10 @@ public class LabelResourceIntTest {
         assertThat(labelList).hasSize(databaseSizeBeforeUpdate);
         Label testLabel = labelList.get(labelList.size() - 1);
         assertThat(testLabel.getLabel()).isEqualTo(UPDATED_LABEL);
+
+        // Validate the Label in Elasticsearch
+        Label labelEs = labelSearchRepository.findOne(testLabel.getId());
+        assertThat(labelEs).isEqualToIgnoringGivenFields(testLabel);
     }
 
     @Test
@@ -227,6 +241,7 @@ public class LabelResourceIntTest {
     public void deleteLabel() throws Exception {
         // Initialize the database
         labelRepository.saveAndFlush(label);
+        labelSearchRepository.save(label);
         int databaseSizeBeforeDelete = labelRepository.findAll().size();
 
         // Get the label
@@ -234,9 +249,28 @@ public class LabelResourceIntTest {
             .accept(TestUtil.APPLICATION_JSON_UTF8))
             .andExpect(status().isOk());
 
+        // Validate Elasticsearch is empty
+        boolean labelExistsInEs = labelSearchRepository.exists(label.getId());
+        assertThat(labelExistsInEs).isFalse();
+
         // Validate the database is empty
         List<Label> labelList = labelRepository.findAll();
         assertThat(labelList).hasSize(databaseSizeBeforeDelete - 1);
+    }
+
+    @Test
+    @Transactional
+    public void searchLabel() throws Exception {
+        // Initialize the database
+        labelRepository.saveAndFlush(label);
+        labelSearchRepository.save(label);
+
+        // Search the label
+        restLabelMockMvc.perform(get("/api/_search/labels?query=id:" + label.getId()))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8_VALUE))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(label.getId().intValue())))
+            .andExpect(jsonPath("$.[*].label").value(hasItem(DEFAULT_LABEL.toString())));
     }
 
     @Test

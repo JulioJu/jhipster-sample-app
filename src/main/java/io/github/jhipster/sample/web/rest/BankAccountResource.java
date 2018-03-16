@@ -4,6 +4,7 @@ import com.codahale.metrics.annotation.Timed;
 import io.github.jhipster.sample.domain.BankAccount;
 
 import io.github.jhipster.sample.repository.BankAccountRepository;
+import io.github.jhipster.sample.repository.search.BankAccountSearchRepository;
 import io.github.jhipster.sample.web.rest.errors.BadRequestAlertException;
 import io.github.jhipster.sample.web.rest.util.HeaderUtil;
 import io.github.jhipster.web.util.ResponseUtil;
@@ -18,6 +19,10 @@ import java.net.URISyntaxException;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
+import static org.elasticsearch.index.query.QueryBuilders.*;
 
 /**
  * REST controller for managing BankAccount.
@@ -32,8 +37,11 @@ public class BankAccountResource {
 
     private final BankAccountRepository bankAccountRepository;
 
-    public BankAccountResource(BankAccountRepository bankAccountRepository) {
+    private final BankAccountSearchRepository bankAccountSearchRepository;
+
+    public BankAccountResource(BankAccountRepository bankAccountRepository, BankAccountSearchRepository bankAccountSearchRepository) {
         this.bankAccountRepository = bankAccountRepository;
+        this.bankAccountSearchRepository = bankAccountSearchRepository;
     }
 
     /**
@@ -51,6 +59,7 @@ public class BankAccountResource {
             throw new BadRequestAlertException("A new bankAccount cannot already have an ID", ENTITY_NAME, "idexists");
         }
         BankAccount result = bankAccountRepository.save(bankAccount);
+        bankAccountSearchRepository.save(result);
         return ResponseEntity.created(new URI("/api/bank-accounts/" + result.getId()))
             .headers(HeaderUtil.createEntityCreationAlert(ENTITY_NAME, result.getId().toString()))
             .body(result);
@@ -73,6 +82,7 @@ public class BankAccountResource {
             return createBankAccount(bankAccount);
         }
         BankAccount result = bankAccountRepository.save(bankAccount);
+        bankAccountSearchRepository.save(result);
         return ResponseEntity.ok()
             .headers(HeaderUtil.createEntityUpdateAlert(ENTITY_NAME, bankAccount.getId().toString()))
             .body(result);
@@ -115,6 +125,24 @@ public class BankAccountResource {
     public ResponseEntity<Void> deleteBankAccount(@PathVariable Long id) {
         log.debug("REST request to delete BankAccount : {}", id);
         bankAccountRepository.delete(id);
+        bankAccountSearchRepository.delete(id);
         return ResponseEntity.ok().headers(HeaderUtil.createEntityDeletionAlert(ENTITY_NAME, id.toString())).build();
     }
+
+    /**
+     * SEARCH  /_search/bank-accounts?query=:query : search for the bankAccount corresponding
+     * to the query.
+     *
+     * @param query the query of the bankAccount search
+     * @return the result of the search
+     */
+    @GetMapping("/_search/bank-accounts")
+    @Timed
+    public List<BankAccount> searchBankAccounts(@RequestParam String query) {
+        log.debug("REST request to search BankAccounts for query {}", query);
+        return StreamSupport
+            .stream(bankAccountSearchRepository.search(queryStringQuery(query)).spliterator(), false)
+            .collect(Collectors.toList());
+    }
+
 }

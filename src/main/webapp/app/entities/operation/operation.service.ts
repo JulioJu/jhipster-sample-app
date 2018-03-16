@@ -14,6 +14,7 @@ export type EntityResponseType = HttpResponse<Operation>;
 export class OperationService {
 
     private resourceUrl =  SERVER_API_URL + 'api/operations';
+    private resourceSearchUrl = SERVER_API_URL + 'api/_search/operations';
 
     constructor(private http: HttpClient, private dateUtils: JhiDateUtils) { }
 
@@ -42,6 +43,12 @@ export class OperationService {
 
     delete(id: number): Observable<HttpResponse<any>> {
         return this.http.delete<any>(`${this.resourceUrl}/${id}`, { observe: 'response'});
+    }
+
+    search(req?: any): Observable<HttpResponse<Operation[]>> {
+        const options = createRequestOption(req);
+        return this.http.get<Operation[]>(this.resourceSearchUrl, { params: options, observe: 'response' })
+            .map((res: HttpResponse<Operation[]>) => this.convertArrayResponse(res));
     }
 
     private convertResponse(res: EntityResponseType): EntityResponseType {

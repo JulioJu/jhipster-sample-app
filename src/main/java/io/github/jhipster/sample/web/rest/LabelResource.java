@@ -4,6 +4,7 @@ import com.codahale.metrics.annotation.Timed;
 import io.github.jhipster.sample.domain.Label;
 
 import io.github.jhipster.sample.repository.LabelRepository;
+import io.github.jhipster.sample.repository.search.LabelSearchRepository;
 import io.github.jhipster.sample.web.rest.errors.BadRequestAlertException;
 import io.github.jhipster.sample.web.rest.util.HeaderUtil;
 import io.github.jhipster.web.util.ResponseUtil;
@@ -18,6 +19,10 @@ import java.net.URISyntaxException;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
+import static org.elasticsearch.index.query.QueryBuilders.*;
 
 /**
  * REST controller for managing Label.
@@ -32,8 +37,11 @@ public class LabelResource {
 
     private final LabelRepository labelRepository;
 
-    public LabelResource(LabelRepository labelRepository) {
+    private final LabelSearchRepository labelSearchRepository;
+
+    public LabelResource(LabelRepository labelRepository, LabelSearchRepository labelSearchRepository) {
         this.labelRepository = labelRepository;
+        this.labelSearchRepository = labelSearchRepository;
     }
 
     /**
@@ -51,6 +59,7 @@ public class LabelResource {
             throw new BadRequestAlertException("A new label cannot already have an ID", ENTITY_NAME, "idexists");
         }
         Label result = labelRepository.save(label);
+        labelSearchRepository.save(result);
         return ResponseEntity.created(new URI("/api/labels/" + result.getId()))
             .headers(HeaderUtil.createEntityCreationAlert(ENTITY_NAME, result.getId().toString()))
             .body(result);
@@ -73,6 +82,7 @@ public class LabelResource {
             return createLabel(label);
         }
         Label result = labelRepository.save(label);
+        labelSearchRepository.save(result);
         return ResponseEntity.ok()
             .headers(HeaderUtil.createEntityUpdateAlert(ENTITY_NAME, label.getId().toString()))
             .body(result);
@@ -115,6 +125,24 @@ public class LabelResource {
     public ResponseEntity<Void> deleteLabel(@PathVariable Long id) {
         log.debug("REST request to delete Label : {}", id);
         labelRepository.delete(id);
+        labelSearchRepository.delete(id);
         return ResponseEntity.ok().headers(HeaderUtil.createEntityDeletionAlert(ENTITY_NAME, id.toString())).build();
     }
+
+    /**
+     * SEARCH  /_search/labels?query=:query : search for the label corresponding
+     * to the query.
+     *
+     * @param query the query of the label search
+     * @return the result of the search
+     */
+    @GetMapping("/_search/labels")
+    @Timed
+    public List<Label> searchLabels(@RequestParam String query) {
+        log.debug("REST request to search Labels for query {}", query);
+        return StreamSupport
+            .stream(labelSearchRepository.search(queryStringQuery(query)).spliterator(), false)
+            .collect(Collectors.toList());
+    }
+
 }
