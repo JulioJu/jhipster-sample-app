@@ -12,7 +12,7 @@
     "prodDatabaseType": "mysql",
     "useCompass": false,
     "buildTool": "maven",
-    "searchEngine": false,
+    "searchEngine": "elasticsearch",
     "enableTranslation": true,
     "applicationType": "monolith",
     "testFrameworks": [
