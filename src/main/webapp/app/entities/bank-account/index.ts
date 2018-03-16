@@ -1,4 +1,3 @@
-export * from './bank-account.model';
 export * from './bank-account-popup.service';
 export * from './bank-account.service';
 export * from './bank-account-dialog.component';

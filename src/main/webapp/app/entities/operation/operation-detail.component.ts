@@ -4,52 +4,42 @@ import { HttpResponse } from '@angular/common/http';
 import { Subscription } from 'rxjs/Subscription';
 import { JhiEventManager } from 'ng-jhipster';
 
-import { Operation } from './operation.model';
+import { IOperation } from 'app/shared/model/operation.model';
 import { OperationService } from './operation.service';
 
 @Component({
-    selector: 'jhi-operation-detail',
-    templateUrl: './operation-detail.component.html'
+  selector: 'jhi-operation-detail',
+  templateUrl: './operation-detail.component.html'
 })
 export class OperationDetailComponent implements OnInit, OnDestroy {
+  operation: IOperation;
+  private subscription: Subscription;
+  private eventSubscriber: Subscription;
 
-    operation: Operation;
-    private subscription: Subscription;
-    private eventSubscriber: Subscription;
+  constructor(private eventManager: JhiEventManager, private operationService: OperationService, private route: ActivatedRoute) {}
 
-    constructor(
-        private eventManager: JhiEventManager,
-        private operationService: OperationService,
-        private route: ActivatedRoute
-    ) {
-    }
+  ngOnInit() {
+    this.subscription = this.route.params.subscribe(params => {
+      this.load(params['id']);
+    });
+    this.registerChangeInOperations();
+  }
 
-    ngOnInit() {
-        this.subscription = this.route.params.subscribe((params) => {
-            this.load(params['id']);
-        });
-        this.registerChangeInOperations();
-    }
+  load(id) {
+    this.operationService.find(id).subscribe((operationResponse: HttpResponse<IOperation>) => {
+      this.operation = operationResponse.body;
+    });
+  }
+  previousState() {
+    window.history.back();
+  }
 
-    load(id) {
-        this.operationService.find(id)
-            .subscribe((operationResponse: HttpResponse<Operation>) => {
-                this.operation = operationResponse.body;
-            });
-    }
-    previousState() {
-        window.history.back();
-    }
+  ngOnDestroy() {
+    this.subscription.unsubscribe();
+    this.eventManager.destroy(this.eventSubscriber);
+  }
 
-    ngOnDestroy() {
-        this.subscription.unsubscribe();
-        this.eventManager.destroy(this.eventSubscriber);
-    }
-
-    registerChangeInOperations() {
-        this.eventSubscriber = this.eventManager.subscribe(
-            'operationListModification',
-            (response) => this.load(this.operation.id)
-        );
-    }
+  registerChangeInOperations() {
+    this.eventSubscriber = this.eventManager.subscribe('operationListModification', response => this.load(this.operation.id));
+  }
 }

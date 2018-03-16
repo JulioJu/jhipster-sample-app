@@ -10,7 +10,10 @@ module.exports = (options) => ({
     resolve: {
         extensions: ['.ts', '.js'],
         modules: ['node_modules'],
-        alias: rxPaths()
+        alias: {
+            app: utils.root('src/main/webapp/app/'),
+            ...rxPaths()
+        }
     },
     stats: {
         children: false
@@ -36,7 +39,7 @@ module.exports = (options) => ({
             },
             {
                 test: /manifest.webapp$/,
-                loader: 'file-loader?name=manifest.webapp!web-app-manifest-loader'
+                loader: 'file-loader?name=manifest.webapp'
             }
         ]
     },
@@ -54,29 +57,6 @@ module.exports = (options) => ({
                 SERVER_API_URL: `''`
             }
         }),
-        new webpack.optimize.CommonsChunkPlugin({
-            name: 'polyfills',
-            chunks: ['polyfills']
-        }),
-        new webpack.optimize.CommonsChunkPlugin({
-            name: 'vendor',
-            chunks: ['main'],
-            minChunks: module => utils.isExternalLib(module)
-        }),
-        new webpack.optimize.CommonsChunkPlugin({
-            name: ['polyfills', 'vendor'].reverse()
-        }),
-        new webpack.optimize.CommonsChunkPlugin({
-            name: ['manifest'],
-            minChunks: Infinity,
-        }),
-        /**
-         * See: https://github.com/angular/angular/issues/11580
-         */
-        new webpack.ContextReplacementPlugin(
-            /(.+)?angular(\\|\/)core(.+)?/,
-            utils.root('src/main/webapp/app'), {}
-        ),
         new CopyWebpackPlugin([
             { from: './node_modules/swagger-ui/dist/css', to: 'swagger-ui/dist/css' },
             { from: './node_modules/swagger-ui/dist/lib', to: 'swagger-ui/dist/lib' },
